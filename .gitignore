@@ -2,3 +2,6 @@ node_modules
 dist
 .env
 .vercel
+
+# Local Firebase config backups
+src/utils/firebase.js.before-*
