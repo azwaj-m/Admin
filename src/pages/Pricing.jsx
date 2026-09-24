@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { auth, db } from '../utils/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { auth, db, functions } from '../utils/firebase';
 
 const initialPlans = {
   silver: { id: 'silver', name: 'SILVER', durationDays: 30, basePriceUsd: 9.99, level: 1 },
@@ -150,8 +151,49 @@ const Pricing = () => {
     }
   };
 
-  const handleActivate = () => {
-    setMessage('Policy activation ابھی محفوظ backend workflow سے منسلک نہیں ہے۔');
+  const handleActivate = async () => {
+    const policyVersion = String(version || '').trim();
+
+    if (!policyVersion) {
+      setMessage('براہِ کرم Policy Version درج کریں۔');
+      return;
+    }
+
+    if (!auth.currentUser) {
+      setMessage('Admin authentication موجود نہیں ہے۔');
+      return;
+    }
+
+    setSaving(true);
+    setMessage('');
+
+    try {
+      const activatePricingPolicy = httpsCallable(
+        functions,
+        'activatePricingPolicy'
+      );
+
+      const result = await activatePricingPolicy({
+        version: policyVersion,
+      });
+
+      setStatus(result?.data?.status || 'active');
+      setMessage('Pricing Policy کامیابی سے activate ہو گئی۔');
+    } catch (error) {
+      console.error('Pricing policy activation error:', error);
+
+      if (error?.code === 'functions/permission-denied') {
+        setMessage('اس Admin account کو Pricing Policy activate کرنے کی اجازت نہیں ہے۔');
+      } else if (error?.code === 'functions/failed-precondition') {
+        setMessage('یہ Policy activate نہیں ہو سکتی۔ ممکن ہے یہ draft نہ ہو یا اس کی configuration نامکمل ہو۔');
+      } else if (error?.code === 'functions/not-found') {
+        setMessage('منتخب Pricing Policy نہیں ملی۔ پہلے Save Draft کریں۔');
+      } else {
+        setMessage('Pricing Policy activate نہیں ہو سکی۔ دوبارہ کوشش کریں۔');
+      }
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -348,10 +390,10 @@ const Pricing = () => {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-yellow-200 bg-yellow-50 p-4 text-xs leading-6 text-yellow-800">
-        <strong>اہم:</strong> یہ values ابھی صرف local draft state میں ہیں۔
-        Save Draft اور Activate actions فی الحال Firestore یا payment system کو
-        تبدیل نہیں کرتے۔
+      <div className="rounded-2xl border border-[#D4AF37]/40 bg-[#FFFDF9] p-4 text-xs leading-6 text-[#4A0E0E]">
+        <strong>اہم:</strong> Save Draft موجودہ Pricing Policy کو Firestore میں draft
+        کے طور پر محفوظ کرتا ہے۔ Activate action صرف authorized Admin کے ذریعے
+        secure Cloud Function کے راستے draft policy کو active کرتا ہے۔
       </div>
 
       {message && (

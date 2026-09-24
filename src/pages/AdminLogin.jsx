@@ -1,58 +1,56 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { auth, googleProvider } from '../utils/firebase';
-import { signInWithPopup, signOut } from 'firebase/auth';
-
-const ALLOWED_ADMIN_EMAIL = 'azwajmarriage@gmail.com';
+import { auth } from '../utils/firebase';
+import {
+  signInWithEmailAndPassword,
+  signOut,
+} from 'firebase/auth';
 
 const AdminLogin = () => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleGoogleLogin = async () => {
+  const handleLogin = async (e) => {
+    e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
-      googleProvider.setCustomParameters({
-        prompt: 'select_account',
-      });
-
-      const credential = await signInWithPopup(auth, googleProvider);
-      const user = credential.user;
-
-      if (
-        (user.email || '').toLowerCase() !==
-        ALLOWED_ADMIN_EMAIL.toLowerCase()
-      ) {
-        await signOut(auth);
-        setError('صرف مجاز Azwaj Google account سے لاگ ان کیا جا سکتا ہے۔');
-        return;
-      }
+      const credential = await signInWithEmailAndPassword(
+        auth,
+        email.trim(),
+        password
+      );
 
       // Custom claims may have changed since the previous token.
-      const tokenResult = await user.getIdTokenResult(true);
+      const tokenResult = await credential.user.getIdTokenResult(true);
       const isAdmin = tokenResult?.claims?.admin === true;
 
       if (!isAdmin) {
         await signOut(auth);
-        setError('اس Google account کو ایڈمن رسائی حاصل نہیں ہے۔');
+        setError('اس اکاؤنٹ کو ایڈمن رسائی حاصل نہیں ہے۔');
         return;
       }
 
       navigate('/dashboard', { replace: true });
     } catch (err) {
-      console.error('Google admin login error:', err);
+      console.error(err);
 
-      if (err.code === 'auth/popup-closed-by-user') {
-        setError('Google لاگ ان منسوخ کر دیا گیا۔');
-      } else if (err.code === 'auth/popup-blocked') {
-        setError('Browser نے Google login window روک دی۔ دوبارہ کوشش کریں۔');
-      } else if (err.code === 'auth/cancelled-popup-request') {
-        setError('Google login پہلے ہی جاری ہے۔');
+      if (
+        err.code === 'auth/user-not-found' ||
+        err.code === 'auth/wrong-password' ||
+        err.code === 'auth/invalid-credential'
+      ) {
+        setError('ای میل یا پاس ورڈ غلط ہے۔');
+      } else if (err.code === 'auth/too-many-requests') {
+        setError(
+          'بہت زیادہ کوششیں کی گئیں۔ تھوڑی دیر بعد دوبارہ کوشش کریں۔'
+        );
       } else {
-        setError('Google لاگ ان کے دوران مسئلہ پیش آیا۔ دوبارہ کوشش کریں۔');
+        setError('لاگ ان کے دوران کوئی مسئلہ پیش آیا۔ دوبارہ کوشش کریں۔');
       }
     } finally {
       setLoading(false);
@@ -72,7 +70,7 @@ const AdminLogin = () => {
           </h2>
 
           <p className="mt-2 text-sm text-gray-500">
-            صرف مجاز Azwaj administrator کے لیے
+            صرف مجاز Azwaj administrators کے لیے
           </p>
         </div>
 
@@ -86,30 +84,51 @@ const AdminLogin = () => {
             </div>
           )}
 
-          <div className="space-y-5">
-            <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-center">
-              <p className="text-xs text-gray-500">
-                مجاز Google account
-              </p>
-              <p className="mt-1 text-sm font-semibold text-[#4A0E0E]" dir="ltr">
-                {ALLOWED_ADMIN_EMAIL}
-              </p>
+          <form className="space-y-5" onSubmit={handleLogin}>
+            <div>
+              <label className="block text-right text-sm font-medium text-gray-700">
+                ای میل ایڈریس
+              </label>
+
+              <input
+                type="email"
+                required
+                autoComplete="email"
+                dir="ltr"
+                className="mt-1 block w-full rounded-xl border border-gray-300 px-3 py-2.5 text-left shadow-sm outline-none transition focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin@example.com"
+              />
+            </div>
+
+            <div>
+              <label className="block text-right text-sm font-medium text-gray-700">
+                پاس ورڈ
+              </label>
+
+              <input
+                type="password"
+                required
+                autoComplete="current-password"
+                dir="ltr"
+                className="mt-1 block w-full rounded-xl border border-gray-300 px-3 py-2.5 text-left shadow-sm outline-none transition focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+              />
             </div>
 
             <button
-              type="button"
-              onClick={handleGoogleLogin}
+              type="submit"
               disabled={loading}
-              className={`flex w-full items-center justify-center gap-3 rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-bold text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#D4AF37] ${
+              className={`flex w-full justify-center rounded-xl bg-[#4A0E0E] px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#5C1515] focus:outline-none focus:ring-2 focus:ring-[#D4AF37] ${
                 loading ? 'cursor-not-allowed opacity-60' : ''
               }`}
             >
-              <span className="text-lg">G</span>
-              {loading
-                ? 'Google account کی تصدیق ہو رہی ہے...'
-                : 'Google سے لاگ ان کریں'}
+              {loading ? 'اجازت کی تصدیق ہو رہی ہے...' : 'لاگ ان کریں'}
             </button>
-          </div>
+          </form>
         </div>
       </div>
     </div>
